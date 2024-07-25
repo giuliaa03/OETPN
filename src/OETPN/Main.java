@@ -1,24 +1,16 @@
 package OETPN;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Arrays;
 
 public class Main {
-
     public static void main(String[] args) {
-        PetriExecution executor = new PetriExecution();
+        PetriExecution petriExecution = new PetriExecution();
 
-        // Initialize inputs
-        List<PetriExecution.Transition> transitions = new ArrayList<>();
-        transitions.add(executor.new Transition("t1", 3));
-        transitions.add(executor.new Transition("t2", 5));
-        transitions.add(executor.new Transition("t3", 7));
+        // Example transitions
+        PetriExecution.Transition T1 = petriExecution.new Transition("T1", 3);
+        PetriExecution.Transition T2 = petriExecution.new Transition("T2", 2);
 
-        int eet = 2;  // Example value for earliest execution time
-        int let = 10; // Example value for latest execution time
-        String out = "t2"; // Example transition to send out
-        String inp = "SampleInput";
-
-        executor.algorithm(transitions, eet, let, out, inp);
+        // Running the algorithm
+        petriExecution.algorithm(Arrays.asList(T1, T2), 1, 5, "T2", "AddTokenP2");
     }
 }
