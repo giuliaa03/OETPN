@@ -2,15 +2,10 @@ package OETPN;
 
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 
 public class PetriExecution {
 
-    //events, states, transitions
     public class Event {
         String type;
 
@@ -35,30 +30,33 @@ public class PetriExecution {
     }
 
     public class State {
-        //initial token count
-        int P1 = 1;
-        int P2 = 0;
-        int P3 = 0;
+        int[] tokens;
+
+        public State(int numPlaces) {
+            tokens = new int[numPlaces];
+        }
 
         @Override
         public String toString() {
-            return "State{P1=" + P1 + ", P2=" + P2 + ", P3=" + P3 + "}";
+            return "State" + Arrays.toString(tokens);
         }
     }
 
     List<Transition> execList = new ArrayList<>();
-    State M;  // initial marking
-    int timeHorizon = 7;
-    int currentTime = 0; //counter
+    State M;
+    int timeHorizon = 10;
+    int currentTime = 0;
 
     Queue<Event> eventQueue = new LinkedList<>();
     Queue<String> inputQueue = new LinkedList<>();
+    int[][] preMatrix;
+    int[][] postMatrix;
+    List<String> outputs = new ArrayList<>();
 
     Event waitEvent() {
-
         while (eventQueue.isEmpty()) {
             if (currentTime >= timeHorizon) {
-                return null; // no more events and time horizon reached
+                return null;
             }
             try {
                 Thread.sleep(1000);
@@ -66,61 +64,46 @@ public class PetriExecution {
                 e.printStackTrace();
             }
             System.out.println("Waiting for event");
-            currentTime++; //for each wait, increment
+            currentTime++;
         }
         Event event = eventQueue.poll();
-        System.out.println("The received event: " + event.type);
+        System.out.println("Received event: " + event.type);
         return event;
     }
 
     void receive(String inp) {
         inputQueue.add(inp);
-        System.out.println("The received input: " + inp);
+        System.out.println("Received input: " + inp);
     }
 
     void updateState() {
         if (!inputQueue.isEmpty()) {
             String input = inputQueue.poll();
+            // Example logic to update state based on input
+            // Adjust this to match the logic of your Petri net
+            System.out.println("State updated based on input: " + input + " -> " + M);
+        }
+    }
 
-            if (input.equals("AddTokenP1")) {
-                M.P1++;
-            } else if (input.equals("RemoveTokenP1")) {
-                if (M.P1 > 0) M.P1--;
-            } else if (input.equals("AddTokenP2")) {
-                M.P2++;
-            } else if (input.equals("RemoveTokenP2")) {
-                if (M.P2 > 0) M.P2--;
-            } else if (input.equals("AddTokenP3")) {
-                M.P3++;
-            } else if (input.equals("RemoveTokenP3")) {
-                if (M.P3 > 0) M.P3--;
+    boolean conditionForTransition(Transition t, int index) {
+        for (int i = 0; i < preMatrix.length; i++) {
+            if (M.tokens[i] < preMatrix[i][index]) {
+                return false;
             }
-            System.out.println("State updated based on the input: " + input + " - " + M);
         }
+        return true;
     }
 
-    boolean conditionForTransition(Transition t) {
-
-        if (t.id.equals("T1")) {
-            return M.P1 > 0;
-        } else if (t.id.equals("T2")) {
-            return M.P2 > 0;
+    void moveTokens(Transition t, int index) {
+        for (int i = 0; i < preMatrix.length; i++) {
+            M.tokens[i] -= preMatrix[i][index];
+            M.tokens[i] += postMatrix[i][index];
         }
-        return false;
-    }
-
-    void moveTokens(Transition t) {
-        if (t.id.equals("T1")) {
-            M.P1--;
-            M.P2++;
-        } else if (t.id.equals("T2")) {
-            M.P2--;
-            M.P3++;
-        }
-        System.out.println("Moved tokens for the transition: " + t.id + " -> " + M);
+        System.out.println("Moved tokens for transition: " + t.id + " -> " + M);
     }
 
     void send(String out) {
+        outputs.add(out);
         System.out.println("Output: " + out);
         try (FileWriter writer = new FileWriter("output.txt", true)) {
             writer.write("Output: " + out + "\n");
@@ -130,14 +113,15 @@ public class PetriExecution {
         }
     }
 
-    public void algorithm(List<Transition> transitions, int eet, int let, String out, String inp) {
-        boolean moreTransitions;
+    public void algorithm(List<Transition> transitions, int[][] preMatrix, int[][] postMatrix, int eet, int let, String out, String inp) {
+        this.preMatrix = preMatrix;
+        this.postMatrix = postMatrix;
 
-        M = new State();  //m is the initial state
+        M = new State(preMatrix.length);
+        M.tokens[0] = 1; // Set initial state with 1 token in P1
         execList = new ArrayList<>();
-        System.out.println("Initialization complete. Initial state is: " + M);
+        System.out.println("Initialization complete. Initial state: " + M);
 
-        // add initial events and input
         eventQueue.add(new Event("tic"));
         eventQueue.add(new Event("tic"));
         eventQueue.add(new Event("tic"));
@@ -158,18 +142,20 @@ public class PetriExecution {
                 for (Transition t : execList) {
                     t.delay--;
                 }
-                currentTime++; // increment for each tic event
+                currentTime++;
             } else if ("input".equals(event.type)) {
                 receive(inp);
                 updateState();
             }
 
+            boolean moreTransitions;
             do {
                 moreTransitions = false;
 
-                for (Transition t : transitions) {
-                    if (conditionForTransition(t) && !execList.contains(t)) {
-                        moveTokens(t);
+                for (int i = 0; i < transitions.size(); i++) {
+                    Transition t = transitions.get(i);
+                    if (conditionForTransition(t, i) && !execList.contains(t)) {
+                        moveTokens(t, i);
                         execList.add(t);
                         t.delay = getDelay(t, eet, let);
                         System.out.println("Transition " + t.id + " added to execList with delay " + t.delay);
@@ -181,7 +167,8 @@ public class PetriExecution {
                     Transition t = iterator.next();
                     if (t.delay == 0) {
                         iterator.remove();
-                        moveTokens(t);
+                        int index = transitions.indexOf(t);
+                        moveTokens(t, index);
                         System.out.println("Transition " + t.id + " executed.");
                         if (isOutTransition(t, out)) {
                             send(out);
